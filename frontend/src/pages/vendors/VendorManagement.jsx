@@ -36,18 +36,23 @@ export default function VendorManagement() {
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Vendor</button>
       </div>
 
-      {/* KPIs */}
-      <div className="kpi-grid" style={{ gridTemplateColumns:'repeat(4,1fr)', marginBottom:'16px' }}>
+      {/* KPIs — auto-fit wraps to 2×2 on mobile, 4 on desktop */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+        gap: '10px',
+        marginBottom: '16px',
+      }}>
         {[
-          { label:'Total Vendors',  value: vendors.length, icon:'🏢', cls:'blue' },
-          { label:'Total Payable',  value: fmt(vendors.reduce((s,v)=>s+v.totalPayable,0)), icon:'💰', cls:'amber' },
-          { label:'Total Paid',     value: fmt(vendors.reduce((s,v)=>s+v.totalPaid,0)),    icon:'✅', cls:'green' },
-          { label:'Outstanding',    value: fmt(totalOwed),                                  icon:'⚠️', cls:'red' },
+          { label:'Total Vendors',  value: vendors.length,                                   icon:'🏢', cls:'blue' },
+          { label:'Total Payable',  value: fmt(vendors.reduce((s,v)=>s+v.totalPayable,0)),   icon:'💰', cls:'amber' },
+          { label:'Total Paid',     value: fmt(vendors.reduce((s,v)=>s+v.totalPaid,0)),      icon:'✅', cls:'green' },
+          { label:'Outstanding',    value: fmt(totalOwed),                                   icon:'⚠️', cls:'red' },
         ].map(k => (
-          <div key={k.label} className="kpi-card">
-            <div className="kpi-label">{k.label}</div>
-            <div style={{ fontSize:'22px', marginBottom:'4px' }}>{k.icon}</div>
-            <div className="kpi-value" style={{ fontSize:'20px' }}>{k.value}</div>
+          <div key={k.label} className="kpi-card" style={{ minWidth: 0 }}>
+            <div className="kpi-label" style={{ fontSize:'10px' }}>{k.label}</div>
+            <div style={{ fontSize:'18px', marginBottom:'2px' }}>{k.icon}</div>
+            <div className="kpi-value" style={{ fontSize:'17px', wordBreak:'break-all' }}>{k.value}</div>
           </div>
         ))}
       </div>
@@ -62,8 +67,8 @@ export default function VendorManagement() {
         ))}
       </div>
 
-      {/* Vendor Cards Grid */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))', gap:'12px' }}>
+      {/* Vendor Cards Grid — 260px min so it works on 375px phones */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:'12px' }}>
         {filtered.map(v => {
           const outstanding = v.totalPayable - v.totalPaid;
           const paidPct = (v.totalPaid / v.totalPayable) * 100;
@@ -83,7 +88,7 @@ export default function VendorManagement() {
                     📍 {v.destination} · 📞 {v.phone}
                   </div>
                 </div>
-                <span style={{ fontSize:'11px', color:'#F59E0B' }}>{Stars(v.rating)}</span>
+                <span style={{ fontSize:'11px', color:'#F59E0B', whiteSpace:'nowrap', flexShrink:0 }}>{Stars(v.rating)}</span>
               </div>
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px', marginBottom:'10px', fontSize:'12px' }}>
@@ -125,7 +130,8 @@ export default function VendorManagement() {
               <button className="modal-close" onClick={() => setSelected(null)}>×</button>
             </div>
             <div className="modal-body">
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px', marginBottom:'16px' }}>
+              {/* Modal stats — wraps to 1 col on small screens */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'10px', marginBottom:'16px' }}>
                 {[
                   { label:'Total Payable', value: fmt(selected.totalPayable), color:'var(--color-warning)' },
                   { label:'Total Paid',    value: fmt(selected.totalPaid),    color:'var(--color-success)' },
@@ -139,12 +145,14 @@ export default function VendorManagement() {
               </div>
               <div className="form-group" style={{ marginBottom:'12px' }}>
                 <label className="form-label">Record Payment</label>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr auto', gap:'8px' }}>
-                  <input className="form-input" type="number" placeholder="Amount (₹)"/>
-                  <select className="form-select">
-                    <option>Cash</option><option>UPI</option><option>Bank Transfer</option>
-                  </select>
-                  <button className="btn btn-success">Pay</button>
+                <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'8px' }}>
+                    <input className="form-input" type="number" placeholder="Amount (₹)"/>
+                    <select className="form-select">
+                      <option>Cash</option><option>UPI</option><option>Bank Transfer</option>
+                    </select>
+                  </div>
+                  <button className="btn btn-success w-full">💳 Record Payment</button>
                 </div>
               </div>
             </div>
