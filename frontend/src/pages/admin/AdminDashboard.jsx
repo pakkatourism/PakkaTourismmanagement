@@ -111,7 +111,7 @@ export default function AdminDashboard() {
   return (
     <div className="page-content">
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <h1 className="page-title">Admin Dashboard</h1>
           <p className="page-sub">Live data from MongoDB · {new Date().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
 
       {/* Attendance Quick Bar */}
       {attendance && attendance.totalEmployees > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '8px', marginBottom: '16px' }}>
           {[
             { label: "Today's Present", value: attendance.present || 0, color: '#059669', bg: '#ECFDF5', icon: '✅' },
             { label: 'Absent', value: attendance.absent || 0, color: '#DC2626', bg: '#FEF2F2', icon: '❌' },
@@ -160,8 +160,8 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* Charts Row 1 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '16px' }}>
+      {/* Charts Row 1 — stacks on mobile */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
         {/* Revenue Trend */}
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -223,8 +223,8 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Charts Row 2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+      {/* Charts Row 2 — stacks on mobile */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
         {/* Lead Funnel */}
         <div className="card">
           <div className="card-title">Lead Pipeline Funnel</div>

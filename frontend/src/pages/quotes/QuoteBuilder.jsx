@@ -29,7 +29,8 @@ export default function QuoteBuilder() {
         <p className="page-sub">Build, compare, and send professional travel quotations</p>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'400px 1fr', gap:'20px' }}>
+      {/* Main layout — stacks on mobile: form above, results below */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))', gap:'20px' }}>
 
         {/* ── Left: Input Form ── */}
         <div>
@@ -106,7 +107,7 @@ export default function QuoteBuilder() {
             <>
               {/* Quote Header */}
               <div className="card" style={{ marginBottom:'16px', background:'linear-gradient(135deg,rgba(37,99,235,0.04),rgba(16,185,129,0.04))' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:'12px' }}>
                   <div>
                     <div style={{ fontSize:'11px', color:'var(--color-text-muted)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Quotation For</div>
                     <div style={{ fontSize:'22px', fontWeight:800, marginTop:'4px' }}>{form.clientName || 'Client Name'}</div>
@@ -161,7 +162,7 @@ export default function QuoteBuilder() {
               </div>
 
               {/* Profit Analysis */}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'12px', marginBottom:'16px' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))', gap:'12px', marginBottom:'16px' }}>
                 {[
                   { label:'Sell Price', value: fmt(sellPrice), color:'var(--color-accent)', icon:'💰' },
                   { label:'Net Profit', value: fmt(profit), color:'var(--color-success)', icon:'📈' },
@@ -197,7 +198,7 @@ export default function QuoteBuilder() {
               </div>
 
               {/* Action Buttons */}
-              <div style={{ display:'flex', gap:'8px', marginTop:'16px' }}>
+              <div style={{ display:'flex', gap:'8px', marginTop:'16px', flexWrap:'wrap' }}>
                 <button className="btn btn-success" style={{ flex:1, justifyContent:'center' }}>💾 Save Quote</button>
                 <button className="btn btn-primary" style={{ flex:1, justifyContent:'center' }}>📤 Send to Client</button>
                 <button className="btn btn-secondary">🖨️ PDF</button>

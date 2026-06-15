@@ -32,24 +32,24 @@ export default function FinancialLedger() {
           <h1 className="page-title">Financial Ledger</h1>
           <p className="page-sub">All income, expenses and transactions</p>
         </div>
-        <div style={{ display:'flex', gap:'8px' }}>
+        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap' }}>
           <button className="btn btn-ghost btn-sm">📥 Export</button>
           <button className="btn btn-primary btn-sm">+ Add Transaction</button>
         </div>
       </div>
 
       {/* KPIs */}
-      <div className="kpi-grid" style={{ gridTemplateColumns:'repeat(3,1fr)', marginBottom:'20px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))', gap:'10px', marginBottom:'20px' }}>
         {[
           { label:'Total Income',  value: fmt(totalIncome),  icon:'📈', color:'var(--color-success)', bg:'var(--color-success-bg)' },
           { label:'Total Expense', value: fmt(totalExpense), icon:'📉', color:'var(--color-danger)',  bg:'var(--color-danger-bg)' },
           { label:'Net Profit',    value: fmt(netProfit),    icon:'💰', color: netProfit>=0?'var(--color-success)':'var(--color-danger)', bg: netProfit>=0?'var(--color-success-bg)':'var(--color-danger-bg)' },
         ].map(k => (
-          <div key={k.label} className="kpi-card" style={{ borderLeft:`3px solid ${k.color}` }}>
-            <div className="kpi-label">{k.label}</div>
-            <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'4px' }}>
-              <div style={{ width:36, height:36, borderRadius:'10px', background:k.bg, display:'grid', placeItems:'center', fontSize:'18px' }}>{k.icon}</div>
-              <div className="kpi-value" style={{ fontSize:'24px', margin:0 }}>{k.value}</div>
+          <div key={k.label} className="kpi-card" style={{ borderLeft:`3px solid ${k.color}`, minWidth:0 }}>
+            <div className="kpi-label" style={{ fontSize:'10px' }}>{k.label}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'4px', flexWrap:'wrap' }}>
+              <div style={{ width:32, height:32, borderRadius:'10px', background:k.bg, display:'grid', placeItems:'center', fontSize:'16px', flexShrink:0 }}>{k.icon}</div>
+              <div className="kpi-value" style={{ fontSize:'18px', margin:0, wordBreak:'break-all' }}>{k.value}</div>
             </div>
           </div>
         ))}

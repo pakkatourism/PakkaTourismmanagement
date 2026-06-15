@@ -48,32 +48,34 @@ export default function BookingManagement() {
       </div>
 
       {/* KPIs */}
-      <div className="kpi-grid" style={{ gridTemplateColumns:'repeat(4,1fr)', marginBottom:'16px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:'10px', marginBottom:'16px' }}>
         {[
           { label:'Total Revenue',  value: fmt(totalRevenue),   icon:'💰', cls:'blue' },
           { label:'Collected',      value: fmt(totalCollected), icon:'✅', cls:'green' },
           { label:'Balance Due',    value: fmt(totalPending),   icon:'⏳', cls:'red' },
           { label:'Total Bookings', value: bookings.length,     icon:'📋', cls:'amber' },
         ].map(k => (
-          <div key={k.label} className="kpi-card">
-            <div className="kpi-label">{k.label}</div>
-            <div style={{ fontSize:'24px', marginBottom:'4px' }}>{k.icon}</div>
-            <div className="kpi-value" style={{ fontSize:'22px' }}>{k.value}</div>
+          <div key={k.label} className="kpi-card" style={{ minWidth:0 }}>
+            <div className="kpi-label" style={{ fontSize:'10px' }}>{k.label}</div>
+            <div style={{ fontSize:'20px', marginBottom:'2px' }}>{k.icon}</div>
+            <div className="kpi-value" style={{ fontSize:'18px', wordBreak:'break-all' }}>{k.value}</div>
           </div>
         ))}
       </div>
 
       {/* Filters */}
       <div style={{ display:'flex', gap:'8px', marginBottom:'16px', flexWrap:'wrap', alignItems:'center' }}>
-        {['all','confirmed','in_progress','completed','cancelled'].map(s => (
-          <button key={s} onClick={() => setFilter(s)}
-            className={`btn btn-sm ${filter===s?'btn-primary':'btn-secondary'}`}>
-            {s === 'all' ? 'All' : s.replace('_',' ')}
-          </button>
-        ))}
-        <div className="search-wrap" style={{ marginLeft:'auto' }}>
+        <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', flex:1 }}>
+          {['all','confirmed','in_progress','completed','cancelled'].map(s => (
+            <button key={s} onClick={() => setFilter(s)}
+              className={`btn btn-sm ${filter===s?'btn-primary':'btn-secondary'}`}>
+              {s === 'all' ? 'All' : s.replace('_',' ')}
+            </button>
+          ))}
+        </div>
+        <div className="search-wrap" style={{ width:'100%', maxWidth:'240px' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <input className="search-input" placeholder="Search bookings…" value={search} onChange={e => setSearch(e.target.value)}/>
+          <input className="search-input" style={{ width:'100%' }} placeholder="Search bookings…" value={search} onChange={e => setSearch(e.target.value)}/>
         </div>
       </div>
 
@@ -157,7 +159,7 @@ export default function BookingManagement() {
               {/* Payment Timeline */}
               <div style={{ fontWeight:700, fontSize:'13px', marginBottom:'12px' }}>💳 Payment Timeline</div>
               <div style={{ marginBottom:'16px' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'12px', marginBottom:'8px' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:'12px', marginBottom:'8px', flexWrap:'wrap', gap:'4px' }}>
                   <span>Total: <strong>{fmt(selected.totalAmount)}</strong></span>
                   <span>Collected: <strong style={{ color:'var(--color-success)' }}>{fmt(selected.advancePaid)}</strong></span>
                   <span>Balance: <strong style={{ color: selected.balanceDue > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>{selected.balanceDue > 0 ? fmt(selected.balanceDue) : '✓ Cleared'}</strong></span>

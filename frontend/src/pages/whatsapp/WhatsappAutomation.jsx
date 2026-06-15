@@ -52,22 +52,23 @@ export default function WhatsappAutomation() {
       </div>
 
       {/* Stats */}
-      <div className="kpi-grid" style={{ gridTemplateColumns:'repeat(4,1fr)', marginBottom:'20px' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))', gap:'10px', marginBottom:'20px' }}>
         {[
           { label:'Templates', value: templates.length, icon:'📝', cls:'blue' },
           { label:'Sent Today', value: '47', icon:'📤', cls:'green' },
           { label:'Read Rate',  value: '84%', icon:'👁', cls:'amber' },
           { label:'Auto-sent',  value: '312', icon:'🤖', cls:'blue' },
         ].map(k => (
-          <div key={k.label} className="kpi-card">
-            <div className="kpi-label">{k.label}</div>
-            <div style={{ fontSize:'22px', marginBottom:'4px' }}>{k.icon}</div>
-            <div className="kpi-value" style={{ fontSize:'22px' }}>{k.value}</div>
+          <div key={k.label} className="kpi-card" style={{ minWidth:0 }}>
+            <div className="kpi-label" style={{ fontSize:'10px' }}>{k.label}</div>
+            <div style={{ fontSize:'20px', marginBottom:'2px' }}>{k.icon}</div>
+            <div className="kpi-value" style={{ fontSize:'20px' }}>{k.value}</div>
           </div>
         ))}
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'320px 1fr', gap:'20px' }}>
+      {/* Main layout — stacks on mobile */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:'20px' }}>
 
         {/* ── Template List ── */}
         <div>
