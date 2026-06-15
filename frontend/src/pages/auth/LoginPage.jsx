@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../../store/useAuthStore';
 
@@ -46,6 +46,7 @@ export default function LoginPage() {
   const [loginRole, setLoginRole] = useState('admin'); // 'admin' | 'employee'
   const [form, setForm]           = useState({ loginId: '', password: '' });
   const [loginErr, setLoginErr]   = useState('');
+  const [fieldErr, setFieldErr]   = useState({ loginId: '', password: '' });
 
   // ── Employee-only state ──
   const [stage, setStage]         = useState('idle');
@@ -62,6 +63,7 @@ export default function LoginPage() {
     setLoginRole(role);
     setForm({ loginId: '', password: '' });
     setLoginErr('');
+    setFieldErr({ loginId: '', password: '' });
     setStage('idle');
     setScanPct(0);
     setShowWorkMode(false);
@@ -125,9 +127,18 @@ export default function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoginErr('');
+    setFieldErr({ loginId: '', password: '' });
 
-    if (!form.loginId || !form.password) {
-      setLoginErr(`Please enter ${isAdmin ? 'Login ID' : 'Employee ID'} and password`);
+    // Per-field validation
+    const errs = { loginId: '', password: '' };
+    if (!form.loginId.trim()) {
+      errs.loginId = isAdmin ? 'Admin Login ID is required' : 'Employee ID is required';
+    }
+    if (!form.password) {
+      errs.password = 'Password is required';
+    }
+    if (errs.loginId || errs.password) {
+      setFieldErr(errs);
       return;
     }
 
@@ -229,11 +240,11 @@ export default function LoginPage() {
             <circle cx="140" cy="140" r="120" fill="url(#globeGrad)" stroke="#3B82F6" strokeWidth="0.5" opacity="0.7"/>
             {[-60,-40,-20,0,20,40,60].map((lat,i) => {
               const y = 140 + (lat/90)*110;
-              const r = Math.cos(lat*Math.PI/180)*110;
-              return <ellipse key={i} cx="140" cy={y} rx={r} ry={r*0.15} fill="none" stroke="#60A5FA" strokeWidth="0.4" opacity="0.4"/>;
+              const r = Math.abs(Math.cos(lat*Math.PI/180)*110);
+              return <ellipse key={i} cx="140" cy={y} rx={r} ry={Math.max(r*0.15, 0)} fill="none" stroke="#60A5FA" strokeWidth="0.4" opacity="0.4"/>;
             })}
             {[0,30,60,90,120,150].map((lng,i) => (
-              <ellipse key={i} cx="140" cy="140" rx={Math.cos(lng*Math.PI/180)*110} ry="110" fill="none" stroke="#60A5FA" strokeWidth="0.4" opacity="0.4"/>
+              <ellipse key={i} cx="140" cy="140" rx={Math.abs(Math.cos(lng*Math.PI/180)*110)} ry="110" fill="none" stroke="#60A5FA" strokeWidth="0.4" opacity="0.4"/>
             ))}
             {[[100,100],[160,90],[120,150],[180,160],[140,120],[90,160]].map(([x,y],i) => (
               <circle key={i} cx={x} cy={y} r="2.5" fill="#34D399" opacity="0.9" filter="url(#glow)">
@@ -269,6 +280,7 @@ export default function LoginPage() {
           @keyframes scanPulse { 0%,100%{opacity:1;transform:scaleX(1)} 50%{opacity:0.6;transform:scaleX(0.95)} }
           @keyframes geoRing { 0%{transform:scale(1);opacity:0.8} 100%{transform:scale(2.5);opacity:0} }
           @keyframes fadeSlideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+          @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
         `}</style>
       </div>
 
@@ -315,23 +327,61 @@ export default function LoginPage() {
           ))}
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
 
           {/* ── Credential Fields ── */}
-          <LoginInput
-            label={isAdmin ? 'Admin Login ID' : 'Employee ID'}
-            value={form.loginId}
-            onChange={v => setForm(f => ({ ...f, loginId: v }))}
-            placeholder={isAdmin ? 'admin@pakkatourism.com' : 'EMP-001'}
-            autoFocus
-          />
-          <LoginInput
-            label="Password"
-            type="password"
-            value={form.password}
-            onChange={v => setForm(f => ({ ...f, password: v }))}
-            placeholder="••••••••"
-          />
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+              {isAdmin ? 'Admin Login ID' : 'Employee ID'}
+            </label>
+            <input
+              type="text"
+              value={form.loginId}
+              placeholder={isAdmin ? 'admin@pakkatourism.com' : 'EMP-001'}
+              autoFocus
+              onChange={e => { setForm(f => ({ ...f, loginId: e.target.value })); setFieldErr(fe => ({ ...fe, loginId: '' })); }}
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: '10px',
+                border: `1.5px solid ${fieldErr.loginId ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
+                background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: '14px',
+                outline: 'none', boxSizing: 'border-box', transition: 'border 0.15s',
+                fontFamily: 'Inter, sans-serif'
+              }}
+              onFocus={e => e.target.style.borderColor = fieldErr.loginId ? '#EF4444' : '#3B82F6'}
+              onBlur={e => e.target.style.borderColor = fieldErr.loginId ? '#EF4444' : 'rgba(255,255,255,0.1)'}
+            />
+            {fieldErr.loginId && (
+              <div style={{ fontSize: '11px', color: '#FCA5A5', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>⚠</span> {fieldErr.loginId}
+              </div>
+            )}
+          </div>
+
+          <div style={{ marginBottom: '12px' }}>
+            <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+              Password
+            </label>
+            <input
+              type="password"
+              value={form.password}
+              placeholder="••••••••"
+              onChange={e => { setForm(f => ({ ...f, password: e.target.value })); setFieldErr(fe => ({ ...fe, password: '' })); }}
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: '10px',
+                border: `1.5px solid ${fieldErr.password ? '#EF4444' : 'rgba(255,255,255,0.1)'}`,
+                background: 'rgba(255,255,255,0.04)', color: '#fff', fontSize: '14px',
+                outline: 'none', boxSizing: 'border-box', transition: 'border 0.15s',
+                fontFamily: 'Inter, sans-serif'
+              }}
+              onFocus={e => e.target.style.borderColor = fieldErr.password ? '#EF4444' : '#3B82F6'}
+              onBlur={e => e.target.style.borderColor = fieldErr.password ? '#EF4444' : 'rgba(255,255,255,0.1)'}
+            />
+            {fieldErr.password && (
+              <div style={{ fontSize: '11px', color: '#FCA5A5', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span>⚠</span> {fieldErr.password}
+              </div>
+            )}
+          </div>
 
           {/* ════════════════════════════════════════════════════
               ADMIN: Clean simple login — no biometrics
@@ -466,37 +516,73 @@ export default function LoginPage() {
           {/* ── Submit Button ── */}
           <button
             type="submit"
-            disabled={loading || (isEmployee && !empCanSubmit && stage !== 'idle')}
+            disabled={loading || stage === 'logging' || (isEmployee && !empCanSubmit && stage !== 'idle')}
             style={{
-              width: '100%', padding: '12px', borderRadius: '12px', border: 'none',
-              background: loading ? 'rgba(37,99,235,0.5)'
+              width: '100%', padding: '13px', borderRadius: '12px', border: 'none',
+              background: (loading || stage === 'logging') ? 'rgba(37,99,235,0.6)'
                 : isAdmin ? 'linear-gradient(135deg,#2563EB,#1D4ED8)'
                 : 'linear-gradient(135deg,#059669,#047857)',
               color: '#fff', fontSize: '14px', fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer',
+              cursor: (loading || stage === 'logging') ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
-              boxShadow: isAdmin ? '0 4px 12px rgba(37,99,235,0.4)' : '0 4px 12px rgba(5,150,105,0.4)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-              fontFamily: 'Inter, sans-serif'
+              boxShadow: isAdmin ? '0 4px 16px rgba(37,99,235,0.45)' : '0 4px 16px rgba(5,150,105,0.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+              fontFamily: 'Inter, sans-serif',
+              position: 'relative', overflow: 'hidden',
+              letterSpacing: '0.01em'
             }}
           >
+            {/* shimmer effect when loading */}
+            {(loading || stage === 'logging') && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%)',
+                animation: 'shimmer 1.2s linear infinite',
+              }} />
+            )}
             {loading || stage === 'logging' ? (
               <>
-                <div style={{ width:14,height:14,border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'spin 0.7s linear infinite' }}/>
-                Authenticating…
+                <div style={{
+                  width: 16, height: 16,
+                  border: '2.5px solid rgba(255,255,255,0.3)',
+                  borderTopColor: '#fff',
+                  borderRadius: '50%',
+                  animation: 'spin 0.7s linear infinite',
+                  flexShrink: 0
+                }}/>
+                <span>Authenticating…</span>
               </>
             ) : getButtonText()}
           </button>
 
-          {/* ── Demo Hints ── */}
-          <div style={{ marginTop: '20px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.3)', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Demo Credentials</div>
+          {/* ── Demo Credentials ── */}
+          <div style={{ marginTop: '20px', padding: '14px 16px', background: 'rgba(59,130,246,0.07)', borderRadius: '12px', border: '1px solid rgba(59,130,246,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+              <span style={{ fontSize: '14px' }}>🔑</span>
+              <div style={{ fontSize: '11px', color: '#93C5FD', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>Demo Credentials</div>
+            </div>
             {isAdmin ? (
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>admin@pakkatourism.com / admin123</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>Login ID</span>
+                  <code style={{ fontSize: '12px', color: '#60A5FA', background: 'rgba(96,165,250,0.1)', padding: '2px 8px', borderRadius: '6px' }}>admin@pakkatourism.com</code>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>Password</span>
+                  <code style={{ fontSize: '12px', color: '#60A5FA', background: 'rgba(96,165,250,0.1)', padding: '2px 8px', borderRadius: '6px' }}>admin123</code>
+                </div>
+              </div>
             ) : (
-              <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)', fontFamily: 'monospace' }}>
-                EMP-001 / employee123<br/>
-                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)' }}>Employee accounts are created by Admin</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>Employee ID</span>
+                  <code style={{ fontSize: '12px', color: '#34D399', background: 'rgba(52,211,153,0.1)', padding: '2px 8px', borderRadius: '6px' }}>EMP-001</code>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>Password</span>
+                  <code style={{ fontSize: '12px', color: '#34D399', background: 'rgba(52,211,153,0.1)', padding: '2px 8px', borderRadius: '6px' }}>employee123</code>
+                </div>
+                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', marginTop: '2px' }}>Employee accounts are created by Admin</div>
               </div>
             )}
           </div>
