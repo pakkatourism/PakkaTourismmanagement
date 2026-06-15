@@ -29,7 +29,7 @@ function timeAgo(date) {
   return `${Math.floor(secs / 86400)}d ago`;
 }
 
-export default function Topbar({ onMenuToggle }) {
+export default function Topbar({ onMenuToggle, mobileOpen }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, token } = useAuthStore();
@@ -90,10 +90,29 @@ export default function Topbar({ onMenuToggle }) {
     <header className="app-topbar">
       {/* Left */}
       <div className="topbar-left">
-        <button className="btn btn-ghost btn-icon btn-sm" onClick={onMenuToggle} aria-label="Toggle menu">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <line x1="2" y1="4" x2="14" y2="4" /><line x1="2" y1="8" x2="14" y2="8" /><line x1="2" y1="12" x2="14" y2="12" />
-          </svg>
+        {/* Hamburger / Close button */}
+        <button
+          className="btn btn-ghost btn-icon btn-sm topbar-hamburger"
+          onClick={onMenuToggle}
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileOpen}
+        >
+          {mobileOpen ? (
+            /* X icon when open */
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          ) : (
+            /* Hamburger ≡ when closed */
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="3" y1="6"  x2="21" y2="6"  />
+              <line x1="3" y1="12" x2="21" y2="12" />
+              <line x1="3" y1="18" x2="21" y2="18" />
+            </svg>
+          )}
         </button>
         <div>
           <div className="topbar-breadcrumb">Pakka Tourism</div>
@@ -103,13 +122,13 @@ export default function Topbar({ onMenuToggle }) {
 
       {/* Right */}
       <div className="topbar-right">
-        {/* Role Badge */}
-        <span className="badge" style={{ background: `${roleColor}18`, color: roleColor, borderColor: `${roleColor}30`, fontSize: '11px', fontWeight: 700 }}>
+        {/* Role Badge — hidden on mobile */}
+        <span className="badge topbar-role-badge" style={{ background: `${roleColor}18`, color: roleColor, borderColor: `${roleColor}30`, fontSize: '11px', fontWeight: 700 }}>
           {user?.role?.toUpperCase()}
         </span>
 
-        {/* Theme Toggle */}
-        <button className="btn btn-ghost btn-icon btn-sm" onClick={toggleTheme} aria-label="Toggle theme">
+        {/* Theme Toggle — hidden on mobile */}
+        <button className="btn btn-ghost btn-icon btn-sm topbar-theme-btn" onClick={toggleTheme} aria-label="Toggle theme">
           {theme === 'light' ? (
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z" /></svg>
           ) : (
@@ -145,10 +164,12 @@ export default function Topbar({ onMenuToggle }) {
           {/* Notification Panel */}
           {notifOpen && (
             <div style={{
-              position: 'absolute', top: '48px', right: 0, width: '340px',
-              background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)',
+          background: 'var(--color-bg-elevated)', border: '1px solid var(--color-border)',
               borderRadius: '16px', boxShadow: 'var(--shadow-xl)', zIndex: 200, overflow: 'hidden',
-              maxHeight: '480px', display: 'flex', flexDirection: 'column'
+              maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+              /* Full-width on mobile, fixed on desktop */
+              position: 'absolute', top: '48px', right: 0,
+              width: 'min(340px, calc(100vw - 32px))',
             }}>
               {/* Header */}
               <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
