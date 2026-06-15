@@ -28,9 +28,9 @@ const getOverview = async (req, res, next) => {
     const totalBookings = await Booking.countDocuments({ status: 'confirmed' });
     const bookingsThisMonth = await Booking.countDocuments({ status: 'confirmed', createdAt: { $gte: startOfMonth } });
 
-    // Leads funnel
+    // Leads funnel (real data)
     const leadStages = await Lead.aggregate([
-      { $group: { _id: '$stage', count: { $sum: 1 } } }
+      { $group: { _id: '$leadStatus', count: { $sum: 1 } } }
     ]);
 
     // Monthly revenue trend (last 6 months)
@@ -49,23 +49,39 @@ const getOverview = async (req, res, next) => {
       { $group: { _id: null, total: { $sum: '$balanceDue' }, count: { $sum: 1 } } }
     ]);
 
-    // Destination analytics
+    // Destination analytics (from bookings)
     const destinations = await Booking.aggregate([
       { $group: { _id: '$destination', count: { $sum: 1 }, revenue: { $sum: '$totalAmount' } } },
       { $sort: { revenue: -1 } },
       { $limit: 10 }
     ]);
 
-    // Employee performance
+    // Employee performance (from leads)
     const performance = await Lead.aggregate([
-      { $match: { stage: 'confirmed' } },
-      { $group: { _id: '$assignedTo', conversions: { $sum: 1 } } },
+      { $match: { leadStatus: { $in: ['confirmed', 'completed'] } } },
+      { $group: { _id: '$assignedEmployee', conversions: { $sum: 1 } } },
       { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
       { $unwind: '$user' },
       { $project: { name: '$user.name', conversions: 1, _id: 0 } },
       { $sort: { conversions: -1 } },
       { $limit: 5 }
     ]);
+
+    // Lead summary
+    const totalLeads = await Lead.countDocuments();
+    const assignedLeads = await Lead.countDocuments({ assignedEmployee: { $ne: null } });
+    const convertedLeads = await Lead.countDocuments({ leadStatus: { $in: ['confirmed', 'completed'] } });
+    const lostLeads = await Lead.countDocuments({ leadStatus: 'lost' });
+
+    // Source distribution (from leads)
+    const sourceDistribution = await Lead.aggregate([
+      { $group: { _id: '$source', count: { $sum: 1 } } }
+    ]);
+
+    // Today's attendance stats
+    const today = new Date().toISOString().split('T')[0];
+    const todayAttendance = await Attendance.find({ date: today });
+    const totalEmployees = await User.countDocuments({ role: 'employee', isActive: true });
 
     const gross = revenueThisMonth[0]?.total || 0;
     const lastMonthGross = revenueLastMonth[0]?.total || 0;
@@ -76,11 +92,19 @@ const getOverview = async (req, res, next) => {
       data: {
         revenue: { thisMonth: gross, lastMonth: lastMonthGross, growth },
         bookings: { total: totalBookings, thisMonth: bookingsThisMonth },
-        leadStages,
-        trend,
+        leads: { total: totalLeads, assigned: assignedLeads, unassigned: totalLeads - assignedLeads, converted: convertedLeads, lost: lostLeads, conversionRate: totalLeads > 0 ? Math.round((convertedLeads / totalLeads) * 100) : 0 },
+        leadStages, trend,
         pendingPayments: pendingPayments[0] || { total: 0, count: 0 },
-        destinations,
-        performance,
+        destinations, performance, sourceDistribution,
+        attendance: {
+          today: {
+            present: todayAttendance.filter(r => ['present', 'late'].includes(r.attendanceStatus)).length,
+            absent: Math.max(0, totalEmployees - todayAttendance.filter(r => r.checkInTime).length),
+            wfh: todayAttendance.filter(r => r.workMode === 'wfh' && r.checkInTime).length,
+            late: todayAttendance.filter(r => r.attendanceStatus === 'late').length,
+            totalEmployees
+          }
+        }
       }
     });
   } catch (err) { next(err); }

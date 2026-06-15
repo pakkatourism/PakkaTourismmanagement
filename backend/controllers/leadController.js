@@ -1,25 +1,52 @@
 const Lead = require('../models/Lead');
+const User = require('../models/User');
+const Notification = require('../models/Notification');
 
-// @route  GET /api/leads
+// ─── Helper: push activity to timeline ──────────────────────────────────────
+async function logActivity(leadId, action, description, performedBy, meta = {}) {
+  await Lead.findByIdAndUpdate(leadId, {
+    $push: {
+      activityTimeline: {
+        $each: [{ action, description, performedBy: performedBy._id, performedByName: performedBy.name, timestamp: new Date(), meta }],
+        $position: 0
+      }
+    }
+  });
+}
+
+// ─── Helper: send notification ───────────────────────────────────────────────
+async function sendNotification(io, recipientId, type, title, message, leadId, actionUrl) {
+  const notif = await Notification.create({ recipient: recipientId, type, title, message, leadId, actionUrl });
+  if (io) io.to(`user_${recipientId}`).emit('notification', notif);
+  return notif;
+}
+
+// ─── GET /api/leads ──────────────────────────────────────────────────────────
 const getLeads = async (req, res, next) => {
   try {
-    const { stage, assignedTo, priority, search, page = 1, limit = 50 } = req.query;
+    const { leadStatus, assignedEmployee, priority, search, page = 1, limit = 50, unassigned } = req.query;
     const filter = {};
 
     // Employees only see their own leads
-    if (req.user.role === 'sales') filter.assignedTo = req.user._id;
-    if (stage)      filter.stage = stage;
-    if (assignedTo) filter.assignedTo = assignedTo;
-    if (priority)   filter.priority = priority;
-    if (search)     filter.$or = [
-      { clientName: { $regex: search, $options: 'i' } },
-      { phone: { $regex: search, $options: 'i' } },
-      { destination: { $regex: search, $options: 'i' } },
-    ];
+    if (req.user.role === 'employee') filter.assignedEmployee = req.user._id;
+
+    if (leadStatus)        filter.leadStatus = leadStatus;
+    if (assignedEmployee)  filter.assignedEmployee = assignedEmployee;
+    if (priority)          filter.priority = priority;
+    if (unassigned === 'true') filter.assignedEmployee = null;
+
+    if (search) {
+      filter.$or = [
+        { customerName: { $regex: search, $options: 'i' } },
+        { mobileNumber: { $regex: search, $options: 'i' } },
+        { destination: { $regex: search, $options: 'i' } },
+      ];
+    }
 
     const total = await Lead.countDocuments(filter);
     const leads = await Lead.find(filter)
-      .populate('assignedTo', 'name avatar')
+      .populate('assignedEmployee', 'name avatar email')
+      .populate('createdBy', 'name')
       .sort({ updatedAt: -1 })
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
@@ -28,82 +55,303 @@ const getLeads = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// @route  POST /api/leads
+// ─── POST /api/leads ─────────────────────────────────────────────────────────
 const createLead = async (req, res, next) => {
   try {
-    const lead = await Lead.create({ ...req.body, createdBy: req.user._id });
+    const leadData = {
+      ...req.body,
+      totalPax: (parseInt(req.body.adults) || 1) + (parseInt(req.body.children) || 0),
+      createdBy: req.user._id,
+    };
+
+    const lead = await Lead.create(leadData);
+
+    // Log activity
+    lead.activityTimeline.push({
+      action: 'lead_created',
+      description: `Lead created by ${req.user.name}`,
+      performedBy: req.user._id,
+      performedByName: req.user.name,
+      timestamp: new Date()
+    });
+    await lead.save();
+
+    // Notify admins if created by employee
+    if (req.user.role === 'employee') {
+      const admins = await User.find({ role: 'admin', isActive: true });
+      const io = req.app.get('io');
+      for (const admin of admins) {
+        await sendNotification(io, admin._id, 'general', 'New Lead Created',
+          `${req.user.name} created a new lead: ${lead.customerName} (${lead.destination})`,
+          lead._id, '/leads');
+      }
+    }
+
     res.status(201).json({ success: true, data: lead });
   } catch (err) { next(err); }
 };
 
-// @route  GET /api/leads/:id
+// ─── GET /api/leads/kanban ───────────────────────────────────────────────────
+const getKanban = async (req, res, next) => {
+  try {
+    const filter = req.user.role === 'employee' ? { assignedEmployee: req.user._id } : {};
+    const stages = ['new_inquiry', 'contacted', 'negotiation', 'quote_sent', 'advance_pending', 'confirmed', 'completed', 'lost'];
+    const kanban = {};
+
+    for (const stage of stages) {
+      kanban[stage] = await Lead.find({ ...filter, leadStatus: stage })
+        .populate('assignedEmployee', 'name avatar')
+        .sort({ updatedAt: -1 })
+        .limit(50);
+    }
+
+    res.json({ success: true, data: kanban });
+  } catch (err) { next(err); }
+};
+
+// ─── GET /api/leads/:id ──────────────────────────────────────────────────────
 const getLead = async (req, res, next) => {
   try {
     const lead = await Lead.findById(req.params.id)
-      .populate('assignedTo', 'name email avatar')
-      .populate('quotes')
-      .populate('booking');
+      .populate('assignedEmployee', 'name email avatar phone')
+      .populate('createdBy', 'name email')
+      .populate('activityTimeline.performedBy', 'name avatar');
+
     if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    // Employees can only access their own leads
+    if (req.user.role === 'employee' && String(lead.assignedEmployee?._id) !== String(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
     res.json({ success: true, data: lead });
   } catch (err) { next(err); }
 };
 
-// @route  PUT /api/leads/:id
+// ─── PUT /api/leads/:id ──────────────────────────────────────────────────────
 const updateLead = async (req, res, next) => {
   try {
-    const lead = await Lead.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (req.body.adults !== undefined || req.body.children !== undefined) {
+      const adults = parseInt(req.body.adults) || 0;
+      const children = parseInt(req.body.children) || 0;
+      req.body.totalPax = adults + children;
+    }
+
+    const lead = await Lead.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
+      .populate('assignedEmployee', 'name avatar');
     if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    await logActivity(req.params.id, 'note_added', `Lead updated by ${req.user.name}`, req.user);
     res.json({ success: true, data: lead });
   } catch (err) { next(err); }
 };
 
-// @route  PATCH /api/leads/:id/stage
+// ─── PATCH /api/leads/:id/stage ──────────────────────────────────────────────
 const updateStage = async (req, res, next) => {
   try {
-    const { stage, lostReason } = req.body;
-    const update = { stage };
-    if (stage === 'lost') { update.lostReason = lostReason; update.lostAt = new Date(); }
-    const lead = await Lead.findByIdAndUpdate(req.params.id, update, { new: true });
-    res.json({ success: true, data: lead });
-  } catch (err) { next(err); }
-};
-
-// @route  POST /api/leads/:id/followup
-const addFollowup = async (req, res, next) => {
-  try {
-    const { note, nextFollowUp } = req.body;
+    const { leadStatus, lostReason } = req.body;
     const lead = await Lead.findById(req.params.id);
     if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
 
-    lead.followUpNotes.push({ note, date: new Date(), by: req.user._id });
-    if (nextFollowUp) lead.nextFollowUp = nextFollowUp;
+    const oldStage = lead.leadStatus;
+    const update = { leadStatus };
+    if (leadStatus === 'lost') { update.lostReason = lostReason; update.lostAt = new Date(); }
+
+    const updated = await Lead.findByIdAndUpdate(req.params.id, update, { new: true })
+      .populate('assignedEmployee', 'name avatar');
+
+    await logActivity(req.params.id, 'stage_changed', `Stage changed from ${oldStage} to ${leadStatus}`, req.user, { oldStage, newStage: leadStatus });
+
+    // Notify assigned employee on significant stage changes
+    const io = req.app.get('io');
+    if (updated.assignedEmployee && leadStatus === 'confirmed') {
+      await sendNotification(io, updated.assignedEmployee._id, 'lead_converted',
+        '🎉 Lead Confirmed!',
+        `${updated.customerName} has been confirmed! Great work!`,
+        updated._id, '/leads');
+    }
+
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+};
+
+// ─── POST /api/leads/:id/assign ──────────────────────────────────────────────
+const assignLead = async (req, res, next) => {
+  try {
+    const { employeeId } = req.body;
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    const isReassign = lead.assignedEmployee !== null;
+    const employee = await User.findById(employeeId);
+    if (!employee) return res.status(404).json({ success: false, message: 'Employee not found' });
+
+    lead.assignedEmployee = employeeId;
     await lead.save();
+
+    // Log activity
+    await logActivity(req.params.id,
+      isReassign ? 'reassigned' : 'assigned',
+      `Lead ${isReassign ? 'reassigned' : 'assigned'} to ${employee.name} by ${req.user.name}`,
+      req.user, { assignedTo: employee.name }
+    );
+
+    // Notify employee
+    const io = req.app.get('io');
+    await sendNotification(io, employeeId,
+      isReassign ? 'lead_reassigned' : 'lead_assigned',
+      isReassign ? 'Lead Reassigned to You' : 'New Lead Assigned',
+      `Lead: ${lead.customerName} (${lead.destination}) has been assigned to you.`,
+      lead._id, '/leads'
+    );
+
+    const updated = await Lead.findById(req.params.id).populate('assignedEmployee', 'name avatar email');
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+};
+
+// ─── POST /api/leads/auto-assign ─────────────────────────────────────────────
+// Round-robin assignment for all unassigned leads
+const autoAssignLeads = async (req, res, next) => {
+  try {
+    const employees = await User.find({ role: 'employee', isActive: true }).sort({ createdAt: 1 });
+    if (employees.length === 0) return res.status(400).json({ success: false, message: 'No active employees found' });
+
+    const unassigned = await Lead.find({ assignedEmployee: null, leadStatus: { $ne: 'lost' } });
+    if (unassigned.length === 0) return res.json({ success: true, message: 'No unassigned leads', assigned: 0 });
+
+    const io = req.app.get('io');
+    let assignedCount = 0;
+
+    // Count existing leads per employee for balanced distribution
+    const leadCounts = {};
+    for (const emp of employees) {
+      leadCounts[emp._id] = await Lead.countDocuments({ assignedEmployee: emp._id, leadStatus: { $nin: ['confirmed', 'completed', 'lost'] } });
+    }
+
+    for (const lead of unassigned) {
+      // Assign to employee with fewest active leads (round-robin with balance)
+      const emp = employees.reduce((min, e) =>
+        (leadCounts[e._id] || 0) < (leadCounts[min._id] || 0) ? e : min, employees[0]);
+
+      lead.assignedEmployee = emp._id;
+      await lead.save();
+      leadCounts[emp._id] = (leadCounts[emp._id] || 0) + 1;
+
+      await logActivity(lead._id, 'assigned',
+        `Auto-assigned to ${emp.name} (round-robin) by ${req.user.name}`, req.user,
+        { assignedTo: emp.name, autoAssign: true });
+
+      await sendNotification(io, emp._id, 'lead_assigned', 'New Lead Assigned',
+        `Lead: ${lead.customerName} (${lead.destination}) auto-assigned to you.`,
+        lead._id, '/leads');
+
+      assignedCount++;
+    }
+
+    res.json({ success: true, message: `${assignedCount} leads auto-assigned (round-robin)`, assigned: assignedCount });
+  } catch (err) { next(err); }
+};
+
+// ─── POST /api/leads/:id/followup ────────────────────────────────────────────
+const addFollowup = async (req, res, next) => {
+  try {
+    const { note, followUpDate } = req.body;
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    lead.followUps.push({
+      note, followUpDate: followUpDate ? new Date(followUpDate) : null,
+      by: req.user._id, byName: req.user.name, createdAt: new Date()
+    });
+    if (followUpDate) lead.followUpDate = new Date(followUpDate);
+    await lead.save();
+
+    await logActivity(lead._id, 'followup_added',
+      `Follow-up added: "${note}" — scheduled for ${followUpDate ? new Date(followUpDate).toLocaleDateString('en-IN') : 'N/A'}`,
+      req.user);
+
     res.json({ success: true, data: lead });
   } catch (err) { next(err); }
 };
 
-// @route  DELETE /api/leads/:id
+// ─── POST /api/leads/:id/activity ────────────────────────────────────────────
+const addActivity = async (req, res, next) => {
+  try {
+    const { action, description } = req.body;
+    const lead = await Lead.findById(req.params.id);
+    if (!lead) return res.status(404).json({ success: false, message: 'Lead not found' });
+
+    await logActivity(lead._id, action, description, req.user);
+    const updated = await Lead.findById(req.params.id);
+    res.json({ success: true, data: updated });
+  } catch (err) { next(err); }
+};
+
+// ─── DELETE /api/leads/:id ───────────────────────────────────────────────────
 const deleteLead = async (req, res, next) => {
   try {
+    if (req.user.role !== 'admin') return res.status(403).json({ success: false, message: 'Admin only' });
     await Lead.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Lead deleted' });
   } catch (err) { next(err); }
 };
 
-// @route  GET /api/leads/kanban
-const getKanban = async (req, res, next) => {
+// ─── GET /api/leads/analytics (admin) ────────────────────────────────────────
+const getLeadAnalytics = async (req, res, next) => {
   try {
-    const filter = req.user.role === 'sales' ? { assignedTo: req.user._id } : {};
-    const stages = ['new_inquiry','in_progress','quote_sent','advance_pending','confirmed','finished','lost'];
-    const kanban = {};
-    for (const stage of stages) {
-      kanban[stage] = await Lead.find({ ...filter, stage })
-        .populate('assignedTo', 'name avatar')
-        .sort({ updatedAt: -1 })
-        .limit(30);
-    }
-    res.json({ success: true, data: kanban });
+    const total = await Lead.countDocuments();
+    const assigned = await Lead.countDocuments({ assignedEmployee: { $ne: null } });
+    const unassigned = await Lead.countDocuments({ assignedEmployee: null });
+    const converted = await Lead.countDocuments({ leadStatus: { $in: ['confirmed', 'completed'] } });
+    const lost = await Lead.countDocuments({ leadStatus: 'lost' });
+    const conversionRate = total > 0 ? Math.round((converted / total) * 100) : 0;
+
+    // Stage distribution
+    const stageDistribution = await Lead.aggregate([
+      { $group: { _id: '$leadStatus', count: { $sum: 1 } } }
+    ]);
+
+    // Employee-wise performance
+    const empPerformance = await Lead.aggregate([
+      { $match: { assignedEmployee: { $ne: null } } },
+      { $group: { _id: '$assignedEmployee', total: { $sum: 1 }, converted: { $sum: { $cond: [{ $in: ['$leadStatus', ['confirmed', 'completed']] }, 1, 0] } } } },
+      { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'emp' } },
+      { $unwind: '$emp' },
+      { $project: { name: '$emp.name', total: 1, converted: 1, convRate: { $round: [{ $multiply: [{ $divide: ['$converted', '$total'] }, 100] }, 0] } } },
+      { $sort: { converted: -1 } }
+    ]);
+
+    // Destination-wise performance
+    const destPerformance = await Lead.aggregate([
+      { $group: { _id: '$destination', count: { $sum: 1 }, budget: { $sum: '$budget' } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+
+    // Source distribution
+    const sourceDistribution = await Lead.aggregate([
+      { $group: { _id: '$source', count: { $sum: 1 } } }
+    ]);
+
+    // Monthly leads (last 6 months)
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+    const monthlyLeads = await Lead.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      { $group: {
+        _id: { year: { $year: '$createdAt' }, month: { $month: '$createdAt' } },
+        count: { $sum: 1 },
+        converted: { $sum: { $cond: [{ $in: ['$leadStatus', ['confirmed', 'completed']] }, 1, 0] } }
+      }},
+      { $sort: { '_id.year': 1, '_id.month': 1 } }
+    ]);
+
+    res.json({
+      success: true,
+      data: { total, assigned, unassigned, converted, lost, conversionRate, stageDistribution, empPerformance, destPerformance, sourceDistribution, monthlyLeads }
+    });
   } catch (err) { next(err); }
 };
 
-module.exports = { getLeads, createLead, getLead, updateLead, updateStage, addFollowup, deleteLead, getKanban };
+module.exports = { getLeads, createLead, getLead, updateLead, updateStage, addFollowup, deleteLead, getKanban, assignLead, autoAssignLeads, addActivity, getLeadAnalytics };

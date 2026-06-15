@@ -1,24 +1,60 @@
 const mongoose = require('mongoose');
 
 const AttendanceSchema = new mongoose.Schema({
-  user:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  date:       { type: String, required: true }, // YYYY-MM-DD
-  checkIn:    { type: Date },
-  checkOut:   { type: Date },
-  workMode:   { type: String, enum: ['office', 'wfh'], required: true },
-  status:     { type: String, enum: ['present', 'absent', 'half_day', 'late', 'on_leave'], default: 'present' },
-  geoFence: {
-    verified:   { type: Boolean, default: false },
-    lat:        { type: Number },
-    lng:        { type: Number },
-    distance:   { type: Number }, // meters from office
+  // Employee reference
+  employeeId:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  employeeName:   { type: String, required: true },
+
+  // Date
+  date:           { type: String, required: true }, // YYYY-MM-DD
+
+  // Time
+  checkInTime:    { type: Date },
+  checkOutTime:   { type: Date },
+  hoursWorked:    { type: Number, default: 0 },
+
+  // Work mode
+  workMode:       { type: String, enum: ['office', 'wfh'], required: true },
+
+  // Geo-location (stored regardless of mode)
+  latitude:       { type: Number },
+  longitude:      { type: Number },
+
+  // Geo-fence result
+  geoFenceStatus: {
+    type: String,
+    enum: ['verified', 'failed', 'wfh', 'pending'],
+    default: 'pending'
   },
-  faceVerified: { type: Boolean, default: false },
-  hoursWorked:  { type: Number, default: 0 },
-  notes:        { type: String },
+  geoFenceDistance: { type: Number }, // meters from office
+
+  // Status
+  attendanceStatus: {
+    type: String,
+    enum: ['present', 'absent', 'late', 'half_day', 'on_leave'],
+    default: 'present'
+  },
+
+  // Biometric
+  faceVerified:   { type: Boolean, default: false },
+
+  // Device info
+  deviceInfo: {
+    userAgent:    { type: String },
+    platform:     { type: String },
+    language:     { type: String },
+  },
+
+  // Admin manual override
+  markedManually:  { type: Boolean, default: false },
+  markedBy:        { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  notes:           { type: String },
+
 }, { timestamps: true });
 
-// Compound unique index: one record per user per day
-AttendanceSchema.index({ user: 1, date: 1 }, { unique: true });
+// One record per employee per day
+AttendanceSchema.index({ employeeId: 1, date: 1 }, { unique: true });
+AttendanceSchema.index({ date: 1 });
+AttendanceSchema.index({ attendanceStatus: 1 });
 
 module.exports = mongoose.model('Attendance', AttendanceSchema);
