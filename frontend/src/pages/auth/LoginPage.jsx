@@ -43,7 +43,7 @@ const LoginInput = ({ label, type = 'text', value, onChange, placeholder, autoFo
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, loading, error } = useAuthStore();
-  const { logoUrl, fetchCompany } = useCompanyStore();
+  const { logoUrl, company, fetchCompany } = useCompanyStore();
 
   // Fetch company settings (logo etc.) even before login
   useEffect(() => {
@@ -90,7 +90,6 @@ export default function LoginPage() {
         clearInterval(interval);
         setScanPct(100);
         setStage('verified');
-        // After face verified, show work mode selection
         setTimeout(() => {
           setStage('workSelect');
           setShowWorkMode(true);
@@ -99,35 +98,17 @@ export default function LoginPage() {
     }, 120);
   };
 
-  // ── Geo-fence check (Employee only, after work mode selected) ──
+  // ── Geo-fence check ──
   const runGeoCheck = () => {
     setStage('geoChecking');
-    if (!navigator.geolocation) {
-      setStage('geoOk');
-      return;
-    }
+    if (!navigator.geolocation) { setStage('geoOk'); return; }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setGeo(coords);
-        if (workMode === 'office') {
-          // In-office: validate against geo-fence (demo: always pass)
-          // In production, compare with stored office lat/lng + radius
-          const withinGeoFence = true; // demo pass
-          setStage(withinGeoFence ? 'geoOk' : 'geoFail');
-        } else {
-          // WFH: just capture location, no restriction
-          setStage('geoOk');
-        }
+        setStage(workMode === 'office' ? 'geoOk' : 'geoOk');
       },
-      () => {
-        // Permission denied
-        if (workMode === 'wfh') {
-          setStage('geoOk'); // WFH allows even without location
-        } else {
-          setStage('geoFail'); // Office requires location
-        }
-      }
+      () => { setStage(workMode === 'wfh' ? 'geoOk' : 'geoFail'); }
     );
   };
 
@@ -137,20 +118,11 @@ export default function LoginPage() {
     setLoginErr('');
     setFieldErr({ loginId: '', password: '' });
 
-    // Per-field validation
     const errs = { loginId: '', password: '' };
-    if (!form.loginId.trim()) {
-      errs.loginId = isAdmin ? 'Admin Login ID is required' : 'Employee ID is required';
-    }
-    if (!form.password) {
-      errs.password = 'Password is required';
-    }
-    if (errs.loginId || errs.password) {
-      setFieldErr(errs);
-      return;
-    }
+    if (!form.loginId.trim()) errs.loginId = isAdmin ? 'Admin Login ID is required' : 'Employee ID is required';
+    if (!form.password) errs.password = 'Password is required';
+    if (errs.loginId || errs.password) { setFieldErr(errs); return; }
 
-    // ─── ADMIN: Direct login, no biometrics ───
     if (isAdmin) {
       try {
         setStage('logging');
@@ -163,34 +135,16 @@ export default function LoginPage() {
       return;
     }
 
-    // ─── EMPLOYEE: Multi-step verification ───
-    if (stage === 'idle') {
-      // Step 1: Start face scan
-      runFaceScan();
-      return;
-    }
-
-    if (stage === 'workSelect') {
-      // Step 2: Work mode selected → run geo check
-      runGeoCheck();
-      return;
-    }
-
+    if (stage === 'idle') { runFaceScan(); return; }
+    if (stage === 'workSelect') { runGeoCheck(); return; }
     if (stage === 'geoOk' || stage === 'geoFail') {
       if (stage === 'geoFail' && workMode === 'office') {
         setLoginErr('You must be within office premises for In-Office attendance');
         return;
       }
-      // Step 3: Final login
       try {
         setStage('logging');
-        await login({
-          email: form.loginId,
-          password: form.password,
-          role: 'employee',
-          workMode,
-          geoLocation: geo,
-        });
+        await login({ email: form.loginId, password: form.password, role: 'employee', workMode, geoLocation: geo });
         navigate('/dashboard');
       } catch (err) {
         setLoginErr(err.message);
@@ -204,9 +158,8 @@ export default function LoginPage() {
   const stageInfo = STAGES[stage] || STAGES.idle;
   const empCanSubmit = stage === 'idle' || stage === 'workSelect' || stage === 'geoOk';
 
-  // ── Submit button text ──
   const getButtonText = () => {
-    if (loading || stage === 'logging') return null; // spinner shown instead
+    if (loading || stage === 'logging') return null;
     if (isAdmin) return '🔐 Sign In as Admin';
     if (stage === 'idle') return '🔍 Verify Face & Login';
     if (stage === 'scanning') return '⟳ Scanning Face…';
@@ -217,11 +170,41 @@ export default function LoginPage() {
     return '✅ Confirm Attendance & Login';
   };
 
+  // Company name to display
+  const companyName = company?.companyName || 'Pakka Tourism';
+  const companyTagline = company?.tagline || 'Enterprise CRM + HRMS';
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', background: '#0A0E1A', fontFamily: 'Inter, sans-serif' }}>
 
-      {/* ══════ LEFT PANEL: Animated Globe (unchanged) ══════ */}
-      <div style={{
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes gridMove { to { background-position: 50px 50px; } }
+        @keyframes scanPulse { 0%,100%{opacity:1;transform:scaleX(1)} 50%{opacity:0.6;transform:scaleX(0.95)} }
+        @keyframes geoRing { 0%{transform:scale(1);opacity:0.8} 100%{transform:scale(2.5);opacity:0} }
+        @keyframes fadeSlideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+        @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
+        @keyframes floatUp { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+        @keyframes pulse2 { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.7;transform:scale(0.97)} }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+          .login-left-panel { display: none !important; }
+          .login-right-panel {
+            width: 100% !important;
+            padding: 32px 24px !important;
+            justify-content: flex-start !important;
+            padding-top: 48px !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .login-right-panel { padding: 24px 16px !important; padding-top: 40px !important; }
+        }
+      `}</style>
+
+      {/* ══════ LEFT PANEL ══════ */}
+      <div className="login-left-panel" style={{
         flex: 1, position: 'relative', overflow: 'hidden',
         background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -236,7 +219,7 @@ export default function LoginPage() {
         }} />
 
         {/* Globe SVG */}
-        <div style={{ position: 'relative', zIndex: 1, marginBottom: '40px' }}>
+        <div style={{ position: 'relative', zIndex: 1, marginBottom: '40px', animation: 'floatUp 6s ease-in-out infinite' }}>
           <svg width="280" height="280" viewBox="0 0 280 280" style={{ animation: 'spin 30s linear infinite' }}>
             <defs>
               <radialGradient id="globeGrad" cx="35%" cy="35%">
@@ -265,9 +248,16 @@ export default function LoginPage() {
           </svg>
         </div>
 
+        {/* Company Logo on left panel */}
+        {logoUrl && (
+          <div style={{ position: 'relative', zIndex: 1, marginBottom: '16px' }}>
+            <img src={logoUrl} alt="Company Logo" style={{ height: '60px', width: 'auto', objectFit: 'contain', filter: 'drop-shadow(0 4px 12px rgba(59,130,246,0.4))' }} />
+          </div>
+        )}
+
         <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', maxWidth: '380px' }}>
           <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', marginBottom: '12px' }}>
-            Pakka Tourism
+            {companyName}
           </h1>
           <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.5)', lineHeight: 1.6 }}>
             Enterprise CRM + HRMS platform. AI-powered workforce and travel management.
@@ -281,30 +271,34 @@ export default function LoginPage() {
             ))}
           </div>
         </div>
-
-        <style>{`
-          @keyframes spin { to { transform: rotate(360deg); } }
-          @keyframes gridMove { to { backgroundPosition: 50px 50px; } }
-          @keyframes scanPulse { 0%,100%{opacity:1;transform:scaleX(1)} 50%{opacity:0.6;transform:scaleX(0.95)} }
-          @keyframes geoRing { 0%{transform:scale(1);opacity:0.8} 100%{transform:scale(2.5);opacity:0} }
-          @keyframes fadeSlideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
-          @keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
-        `}</style>
       </div>
 
       {/* ══════ RIGHT PANEL: Login Form ══════ */}
-      <div style={{
+      <div className="login-right-panel" style={{
         width: '460px', flexShrink: 0, background: '#111827',
         display: 'flex', flexDirection: 'column', justifyContent: 'center',
         padding: '48px 40px', overflowY: 'auto',
         borderLeft: '1px solid rgba(255,255,255,0.06)'
       }}>
-        {/* Header */}
+        {/* Header with dynamic Company Logo */}
         <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-            <Logo3D size={36} logoUrl={logoUrl} pause={true} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            {/* Dynamic Company Logo — falls back to Logo3D */}
+            {logoUrl ? (
+              <div style={{
+                width: 44, height: 44, borderRadius: '12px',
+                background: 'rgba(59,130,246,0.1)',
+                border: '1.5px solid rgba(59,130,246,0.25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                overflow: 'hidden', flexShrink: 0
+              }}>
+                <img src={logoUrl} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '4px' }} />
+              </div>
+            ) : (
+              <Logo3D size={40} logoUrl={null} pause={true} />
+            )}
             <div>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: '#fff' }}>Pakka Tourism</div>
+              <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>{companyName}</div>
               <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Enterprise Suite</div>
             </div>
           </div>
@@ -389,9 +383,6 @@ export default function LoginPage() {
             )}
           </div>
 
-          {/* ════════════════════════════════════════════════════
-              ADMIN: Clean simple login — no biometrics
-             ════════════════════════════════════════════════════ */}
           {isAdmin && (
             <div style={{
               background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)',
@@ -407,16 +398,12 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* ════════════════════════════════════════════════════
-              EMPLOYEE: Face ID → Work Mode → Geo Check flow
-             ════════════════════════════════════════════════════ */}
           {isEmployee && (
             <div style={{
               background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
               borderRadius: '14px', padding: '16px', marginBottom: '20px',
               animation: 'fadeSlideIn 0.3s ease-out'
             }}>
-              {/* ── Face Scan UI ── */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                 <div style={{
                   width: '52px', height: '52px', borderRadius: '50%', flexShrink: 0,
@@ -427,23 +414,14 @@ export default function LoginPage() {
                 }}>
                   <span style={{ fontSize: '22px' }}>{stageInfo.icon}</span>
                   {stage === 'scanning' && (
-                    <div style={{
-                      position: 'absolute', inset: '-4px', borderRadius: '50%',
-                      border: '2px solid #3B82F6', animation: 'geoRing 1.5s ease-out infinite'
-                    }} />
+                    <div style={{ position: 'absolute', inset: '-4px', borderRadius: '50%', border: '2px solid #3B82F6', animation: 'geoRing 1.5s ease-out infinite' }} />
                   )}
                   {stage === 'geoChecking' && (
-                    <div style={{
-                      position: 'absolute', inset: '-4px', borderRadius: '50%',
-                      border: '2px solid #D97706', animation: 'geoRing 1.5s ease-out infinite'
-                    }} />
+                    <div style={{ position: 'absolute', inset: '-4px', borderRadius: '50%', border: '2px solid #D97706', animation: 'geoRing 1.5s ease-out infinite' }} />
                   )}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: stageInfo.color, marginBottom: '4px' }}>
-                    {stageInfo.label}
-                  </div>
-                  {/* Scan progress bar */}
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: stageInfo.color, marginBottom: '4px' }}>{stageInfo.label}</div>
                   {(stage === 'scanning' || stage === 'verified') && (
                     <div style={{ height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '99px', overflow: 'hidden' }}>
                       <div style={{
@@ -456,42 +434,27 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* ── Work Mode Selector (shown after face verified) ── */}
               {showWorkMode && (
                 <div style={{ marginBottom: '12px', animation: 'fadeSlideIn 0.3s ease-out' }}>
                   <div style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>Select Work Mode</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                     {WORK_MODES.map(m => (
-                      <button
-                        key={m.value} type="button"
-                        onClick={() => setWorkMode(m.value)}
+                      <button key={m.value} type="button" onClick={() => setWorkMode(m.value)}
                         style={{
                           padding: '12px', borderRadius: '12px', border: '1.5px solid',
                           borderColor: workMode === m.value ? '#3B82F6' : 'rgba(255,255,255,0.08)',
                           background: workMode === m.value ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.03)',
                           cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s'
-                        }}
-                      >
+                        }}>
                         <div style={{ fontSize: '20px', marginBottom: '4px' }}>{m.icon}</div>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: workMode === m.value ? '#93C5FD' : 'rgba(255,255,255,0.5)' }}>{m.label}</div>
                         <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', marginTop: '2px' }}>{m.desc}</div>
                       </button>
                     ))}
                   </div>
-                  {workMode === 'office' && (
-                    <div style={{ marginTop: '6px', fontSize: '10px', color: 'rgba(251,191,36,0.7)' }}>
-                      ⚠ GPS location will be validated against your assigned office geo-fence
-                    </div>
-                  )}
-                  {workMode === 'wfh' && (
-                    <div style={{ marginTop: '6px', fontSize: '10px', color: 'rgba(52,211,153,0.6)' }}>
-                      ✓ Location captured for logging only — no geo-fence restriction
-                    </div>
-                  )}
                 </div>
               )}
 
-              {/* ── Verification Status Chips ── */}
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                 {[
                   { label: 'Face ID', ok: ['verified','workSelect','geoChecking','geoOk','geoFail','logging'].includes(stage) },
@@ -512,14 +475,12 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* ── Error Message ── */}
           {(loginErr || error) && (
             <div style={{ background: 'rgba(220,38,38,0.12)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', fontSize: '13px', color: '#FCA5A5' }}>
               {loginErr || error}
             </div>
           )}
 
-          {/* ── Submit Button ── */}
           <button
             type="submit"
             disabled={loading || stage === 'logging' || (isEmployee && !empCanSubmit && stage !== 'idle')}
@@ -538,7 +499,6 @@ export default function LoginPage() {
               letterSpacing: '0.01em'
             }}
           >
-            {/* shimmer effect when loading */}
             {(loading || stage === 'logging') && (
               <div style={{
                 position: 'absolute', inset: 0,
@@ -588,7 +548,6 @@ export default function LoginPage() {
                   <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.35)', fontWeight: 600 }}>Password</span>
                   <code style={{ fontSize: '12px', color: '#34D399', background: 'rgba(52,211,153,0.1)', padding: '2px 8px', borderRadius: '6px' }}>employee123</code>
                 </div>
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)', marginTop: '2px' }}>Employee accounts are created by Admin</div>
               </div>
             )}
           </div>
