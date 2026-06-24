@@ -34,7 +34,7 @@ export default function Logo3D({ logoUrl, size = 44, pause = true }) {
     if (!url) return null;
     if (url.startsWith('http') || url.startsWith('data:')) return url;
     // Prepend backend URL if it's an uploaded file
-    const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000';
+    const baseUrl = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : '';
     return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 

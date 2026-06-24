@@ -58,7 +58,7 @@ const useNotificationStore = create((set, get) => ({
   connectSocket: (token) => {
     if (socketInstance?.connected) return;
 
-    socketInstance = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000', {
+    socketInstance = io(import.meta.env.VITE_SOCKET_URL || '', {
       auth: { token },
       reconnection: true,
       reconnectionAttempts: 5,

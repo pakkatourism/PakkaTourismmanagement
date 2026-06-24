@@ -14,7 +14,7 @@ import { create } from 'zustand';
 
 const API_BASE = import.meta.env.VITE_API_URL
   ? import.meta.env.VITE_API_URL.replace('/api', '')
-  : 'http://localhost:5000';
+  : '';
 
 // ─── Helper: resolve logo URL to full URL ─────────────────────────────────
 export function resolveLogoUrl(logoPath) {

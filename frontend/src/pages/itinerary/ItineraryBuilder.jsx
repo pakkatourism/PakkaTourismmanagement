@@ -7,7 +7,7 @@ import api from '../../services/api';
 import useCompanyStore from '../../store/useCompanyStore';
 
 const ACTIVITY_ICONS = ['🚗','🏨','🥾','🌊','🏔️','🎭','🍜','🛺','⛵','🚠','🎪','🌅'];
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const DEFAULT_ITINERARY = {
   title: 'Manali Adventure Package',
